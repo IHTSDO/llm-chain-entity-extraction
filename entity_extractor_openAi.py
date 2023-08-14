@@ -1,6 +1,11 @@
-from llama_cpp import Llama
+import openai
 from nltk.stem.lancaster import LancasterStemmer
+import json
+import time
+import re
 import fhir_api
+
+openai.api_key = "sk-________________________________________________"
 
 # ANSI escape sequences for text colors
 COLOR_RED = "\033[91m"
@@ -13,6 +18,17 @@ def colorize_text(text, replacements, color_code):
     for word in replacements:
         text = text.replace(word, f"{color_code}{word}{COLOR_RESET}")
     return text
+
+# list models
+models = openai.Model.list()
+
+# print the accesssible text completion models
+print(', '.join(str(model_data.id) for model_data in models.data))
+
+MODEL = "gpt-3.5-turbo-16k"
+
+# Recommended for deterministic and foocused output that is 'more likely to be correct and efficient'.
+TEMPERATURE = 0.2
 
 server_url = "https://snowstorm.ihtsdotools.org/fhir"
 # server_url = "http://localhost:8080"
@@ -36,89 +52,99 @@ def match_snomed(term):
             best_match = fhir_response['expansion']['contains'][0]
     return best_match
 
-llm = Llama(model_path="/Users/alo/llm/llama.cpp/models/vicuna-13b-v1.3/ggml-model-q4_0.bin", n_ctx=2048, verbose=False)
-
 def simplify(term):
-    q = """
-    I need to search these clinical phrases in SNOMED, and I know they don't match exactly as they are now. Please generate an equivalent the clinical phrase to facilitate matching. Simplify by removing plurals, and other non-essential words. Do not include any commentary or explanation in your response. Only a clinical term like a clinician would use.
-    Q: right hip fractures
-    A: hip fracture
-    Q: has diabetes mellitus
-    A: diabetes mellitus
-    Q: several scars
-    A: scar
-    Q: catastroophic arterial hypertension
-    A: arterial hypertension
-    """
-    prompt = q + "\nQ: " + term + "\n"
-    output = llm(prompt, max_tokens=512, stop=["Q:", "\n"], echo=True, temperature=1.0)
-    a = output['choices'][0]['text']
-    # remove the question
-    a = a[len(prompt):]
-    return a[3:]
+    prompts = [ { "role": "system", "content": """You are a clinical entity simplifier. Respond with simpler forms of the terms provided by the user.
+                 The goal is to make the terms easier to match with SNOMED.
+                 SNOMED is a clinical terminology that does not use plurals or other non-essential words. Remove plurals, and other non-essential words.
+                 Do not include any commentary or explanation in your response. Only a clinical term like a clinician would use."""},
+                {"role":"user", "content":"pain in hands"},
+                {"role":"assistant", "content":"pain in hand"},
+                {"role":"user", "content":"multiple vesicular lesions"},
+                {"role":"assistant", "content":"vesicular lesion"},
+                {"role":"user", "content":term} ]
+    response = openai.ChatCompletion.create(model=MODEL, messages=prompts, temperature=TEMPERATURE)
+    return response["choices"][0]["message"]["content"]
 
-def generalize(term):
-    q = """
-    Please analyze the following medical text and generalize specific medical terms to more broad categories. Your task is to provide a new short an concise medical term without the specificity of the original term. Do not include any commentary or explanation in your response.
-    Q: back pain
-    A: pain
-    Q: intermitent asthma
-    A: asthma
-    Q: massive hemoptysis
-    A: hemoptysis
-    Q: large pleural effusion
-    A: pleural effusion
-    """
-    prompt = q + "\nQ: " + term + "\n"
-    output = llm(prompt, max_tokens=512, stop=["Q:", "\n"], echo=True, temperature=1.0)
-    a = output['choices'][0]['text']
-    # remove the question
-    a = a[len(prompt):]
-    return a[3:]
+def generalise(term):
 
-st = LancasterStemmer()
+    prompts = [ { "role": "system", "content": """You are a clinical entity simplifier.
+                 The goal is to make the terms easier to match with SNOMED.
+                 SNOMED is a clinical terminology that does not use plurals or other non-essential words. Remove plurals, and other non-essential words.
+                 Do not include any commentary or explanation in your response. Only a clinical term like a clinician would use."""},
+                {"role":"user", "content":"large pleural effusion"},
+                {"role":"assistant", "content":"pleural effusion"},
+                {"role":"user", "content":"intermittent asthma"},
+                {"role":"assistant", "content":"asthma"},
+                {"role":"user", "content":term} ]
+    response = openai.ChatCompletion.create(model=MODEL, messages=prompts, temperature=TEMPERATURE)
+    return response["choices"][0]["message"]["content"]
 
-# llm = Llama(model_path="/Users/alo/llm/llama.cpp/models/13B/ggml-model-q4_0.bin", verbose=False)
-q = """
-Review the following clinical notes and extract all mentions of symptoms, diagnoses, procedures, and medications. Please make sure to exclude any severity or laterality modifiers from your extractions. Include also any medical acronyms detected. The goal is to establish a clear list of the patient's signs and symptoms, the diagnoses made, any procedures performed or planned, and medications prescribed or taken, while omitting details related to the severity of symptoms or diagnoses and the side of the body affected.
-Q: A 44-year-old woman was evaluated in the rheumatology clinic of this hospital because of proximal muscle weakness and myalgia. He has a history of liver nodules.
-A: [ 'muscle weakness', 'myalgia', 'liver nodules' ]
-Q: A 76-year-old man with a history of chronic back pain presented with dizziness and altered mental status. Laboratory evaluation identified anion-gap metabolic acidosis.
-A: [ 'chronic back pain', 'dizziness', 'altered mental status', 'anion-gap metabolic acidosis' ]
-Q: A 47-year-old woman with malignant melanoma was found to have bilateral pulmonary nodules, hilar and mediastinal lymphadenopathy, and left upper lobe infiltrate. An MRI was performed.
-A: [ 'malignant melanoma', 'pulmonary nodules', 'hilar and mediastinal lymphadenopathy', 'upper lobe infiltrate', 'Magnetic Resonance Imaging' ]
+
+extract_prompts = [
+    { "role": "system", "content": """You are a clinical entity extractor. Report results as a JSON array of objects. \
+Review the clinical notes provided by the user and extract all mentions of symptoms, diagnoses, procedures, and medications. \
+Each clinical note is independent. \
+Don't include demographics, commentary or clarification, only entities and the requested properties. \
+Provide the following information for each entity:
+ - text: text of the entity
+ - type: type of clinical entity (symptom, diagnosis, procedure, medication, etc.)
+ - context: present or absent"""},
+    {"role":"user", "content":"A 76-year-old man with a history of chronic back pain presented with dizziness and altered mental status. Laboratory evaluation identified anion-gap metabolic acidosis."},
+    {"role":"assistant", "content":'[{"text":"chronic back pain"}, {"text":"dizziness"}, {"text":"altered mental status"}, {"text":"anion-gap metabolic acidosis"}]'},
+    {"role":"user", "content":""}
+    ]
+
+# Run the LLM on a test prompt to make sure it's awake
+
+"""start_time = time.time()
+print('Running initialisation test')
+response = llm.create_chat_completion([
+    { "role": "system", "content": "You talk."},
+    {"role":"user", "content":"Say hi."}
+    ], max_tokens=4, temperature=0)
+print(repr(response))
+print(COLOR_BLUE, "Elapsed time: ", time.time() - start_time, "Finish reason:", response["choices"][0]["finish_reason"], "Total tokens:", response["usage"]["total_tokens"], COLOR_RESET)
 """
+
 # Open the file in read mode
 with open("clinical_text.txt", "r") as file:
     # Iterate over each line in the file
     for line in file:
-        line = "\nQ: " + line + "\n"
-        # Process each line
-        print(COLOR_BLUE + line + COLOR_RESET)
-        prompt = q + line
-        output = llm(prompt, max_tokens=2048, stop=["Q:", "\n"], echo=False, temperature=1.0)
-        a = output['choices'][0]['text']
-        # remove the question
-        # a = a[len(prompt):]
-        results = eval(a[3:])
-        resultString = line[3:]
-        resultString = colorize_text(resultString, results, COLOR_GREEN)
-        print(resultString)
-        for result in results:
-            snomed_match = match_snomed(result)
-            if snomed_match:
-                print(COLOR_GREEN, result, COLOR_BLUE, snomed_match['code'], snomed_match['display'], COLOR_RESET)
-            else:
-                simplified = simplify(result)
-                if simplified != result:
-                    snomed_match = match_snomed(simplified)
-                if snomed_match:
-                    print(COLOR_GREEN, result, COLOR_YELLOW, simplified, COLOR_BLUE, snomed_match['code'], snomed_match['display'], COLOR_RESET)
+        print("----------------------------------------------")
+        print(line.strip())
+        extract_prompts[1]["content"] = "Extract clinical entities form this text:\n" + line
+        start_time = time.time()
+        response = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=extract_prompts, temperature=TEMPERATURE)
+        print(COLOR_BLUE, "Elapsed time: ", time.time() - start_time, "Finish reason:", response["choices"][0]["finish_reason"], "Total tokens:", response["usage"]["total_tokens"], COLOR_RESET)
+        json_text = response["choices"][0]["message"]["content"]
+        pattern = r'\[.*\]'
+        match = re.search(pattern, json_text, re.DOTALL)
+        if match:
+            json_array = re.search(pattern, json_text, re.DOTALL).group()
+            results = json.loads(json_array)
+            # Generate colorized text for output
+            detectedTerms = []
+            for entity in results:
+                detectedTerms.append(entity["text"])
+            # print(detectedTerms)
+            resultString = colorize_text(line, detectedTerms, COLOR_GREEN)
+            print(resultString.strip())
+            # Match with SNOMED
+            for entity in results:
+                best_match = match_snomed(entity["text"])
+                if best_match:
+                    print(entity["text"], ":", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET)
                 else:
-                    single_word = generalize(result)
-                    if single_word != simplified:
-                        snomed_match = match_snomed(single_word)
-                    if snomed_match:
-                        print(COLOR_GREEN, result, COLOR_YELLOW, simplified, single_word, COLOR_BLUE, snomed_match['code'], snomed_match['display'], COLOR_RESET)
+                    simple =  simplify(entity["text"])
+                    best_match = match_snomed(simple)
+                    if best_match:
+                        print(entity["text"],COLOR_YELLOW,"(", simple, ")", COLOR_RESET, ":", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET)
                     else:
-                        print(COLOR_RED, result, COLOR_YELLOW, simplified, single_word, COLOR_RESET)
+                        general = generalise(entity["text"])
+                        best_match = match_snomed(general)
+                        if best_match:
+                            print(entity["text"], ":", COLOR_YELLOW, f"( {simple}: {general} )", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET)
+                        else:
+                            print(entity["text"],COLOR_YELLOW, f"( {simple}: {general} )", COLOR_RESET, ":", COLOR_RED, "No match", COLOR_RESET)
+        else:
+            print(COLOR_RED, "No entities detected", COLOR_RESET)

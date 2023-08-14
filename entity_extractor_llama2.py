@@ -37,17 +37,20 @@ def match_snomed(term):
             best_match = fhir_response['expansion']['contains'][0]
     return best_match
 
-USE_GPU = True
 
+# llm = Llama(model_path="/Users/alo/llm/llama.cpp/models/13B/ggml-model-q4_0.bin", verbose=False)
+# llm = Llama(model_path="/Users/alo/llm/llama.cpp/models/vicuna-13b-v1.3/ggml-model-q4_0.bin", n_ctx=2048, verbose=False)
 # llm = Llama(model_path="/Users/alo/llm/llama2/llama-2-13b-chat/ggml-model-q4_0.bin", n_ctx=2048, verbose=False)
 MODEL_PATH = "/Users/yoga/llama-cpp/models/llama-2-13b-chat/ggml-model-q4_0.bin"
+EFFICIENCY_CORES = 4
+USE_GPU = True
 
 if USE_GPU:
     llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=True, n_gpu_layers=128,
-                n_threads=max(1, multiprocessing.cpu_count() - 4), use_mlock=True)
+                n_threads=max(1, multiprocessing.cpu_count() - EFFICIENCY_CORES), use_mlock=True)
 else:
     llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=False,
-                n_threads=max(1, multiprocessing.cpu_count() - 2), use_mlock=True)
+                n_threads=max(1, multiprocessing.cpu_count() - EFFICIENCY_CORES), use_mlock=True)
 
 #llm = Llama(model_path="/Users/alo/llm/llama.cpp/models/vicuna-13b-v1.3/ggml-model-q4_0.bin", n_ctx=2048, verbose=False)
 
@@ -91,7 +94,6 @@ def generalize(term):
 
 st = LancasterStemmer()
 
-# llm = Llama(model_path="/Users/alo/llm/llama.cpp/models/13B/ggml-model-q4_0.bin", verbose=False)
 q = """
 Review the following clinical notes and extract all mentions of symptoms, diagnoses, procedures, and medications. Please make sure to exclude any severity or laterality modifiers from your extractions. Include also any medical acronyms detected. The goal is to establish a clear list of the patient's signs and symptoms, the diagnoses made, any procedures performed or planned, and medications prescribed or taken, while omitting details related to the severity of symptoms or diagnoses and the side of the body affected.
 Q: A 44-year-old woman was evaluated in the rheumatology clinic of this hospital because of proximal muscle weakness and myalgia. He has a history of liver nodules.

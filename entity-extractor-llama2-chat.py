@@ -43,17 +43,19 @@ def match_snomed(term):
             best_match = fhir_response['expansion']['contains'][0]
     return best_match
 
+
+# MODEL_PATH = "/Users/alo/llm/llama2/llama-2-13b-chat/ggml-model-q4_0.bin"
+MODEL_PATH = "/Users/yoga/llama-cpp/models/llama-2-13b-chat/ggml-model-q4_0.bin"
+# Avoid threading onto efficiency cores. Set to None for automatic.
+N_THREADS = max(1, multiprocessing.cpu_count() - 4)
 USE_GPU = True
 
-# llm = Llama(model_path="/Users/alo/llm/llama2/llama-2-13b-chat/ggml-model-q4_0.bin", n_ctx=2048, verbose=False)
-MODEL_PATH = "/Users/yoga/llama-cpp/models/llama-2-13b-chat/ggml-model-q4_0.bin"
-
 if USE_GPU:
-    llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=False, n_gpu_layers=128,
-                n_threads=max(1, multiprocessing.cpu_count() - 4), use_mlock=True)
+    llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=True, n_gpu_layers=128,
+                n_threads=N_THREADS, use_mlock=True)
 else:
     llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=False,
-                n_threads=max(1, multiprocessing.cpu_count() - 2), use_mlock=True)
+                n_threads=N_THREADS, use_mlock=True)
 
 def simplify(term):
     prompts = [ { "role": "system", "content": """You are a clinical entity simplifier. Respond with simpler forms of the terms provided by the user.
