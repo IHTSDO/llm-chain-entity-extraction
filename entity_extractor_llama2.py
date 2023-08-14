@@ -1,6 +1,7 @@
 from llama_cpp import Llama
 from nltk.stem.lancaster import LancasterStemmer
 import fhir_api
+import multiprocessing
 
 # ANSI escape sequences for text colors
 COLOR_RED = "\033[91m"
@@ -36,7 +37,19 @@ def match_snomed(term):
             best_match = fhir_response['expansion']['contains'][0]
     return best_match
 
-llm = Llama(model_path="/Users/alo/llm/llama.cpp/models/vicuna-13b-v1.3/ggml-model-q4_0.bin", n_ctx=2048, verbose=False)
+USE_GPU = True
+
+# llm = Llama(model_path="/Users/alo/llm/llama2/llama-2-13b-chat/ggml-model-q4_0.bin", n_ctx=2048, verbose=False)
+MODEL_PATH = "/Users/yoga/llama-cpp/models/llama-2-13b-chat/ggml-model-q4_0.bin"
+
+if USE_GPU:
+    llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=True, n_gpu_layers=128,
+                n_threads=max(1, multiprocessing.cpu_count() - 4), use_mlock=True)
+else:
+    llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=False,
+                n_threads=max(1, multiprocessing.cpu_count() - 2), use_mlock=True)
+
+#llm = Llama(model_path="/Users/alo/llm/llama.cpp/models/vicuna-13b-v1.3/ggml-model-q4_0.bin", n_ctx=2048, verbose=False)
 
 def simplify(term):
     q = """

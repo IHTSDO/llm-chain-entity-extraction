@@ -3,6 +3,8 @@ import json
 import time
 import re
 import fhir_api
+import multiprocessing
+# import cProfile
 
 # ANSI escape sequences for text colors
 COLOR_RED = "\033[91m"
@@ -35,17 +37,29 @@ def match_snomed(term):
                 best_match = item
                 break
         # If there is no exact match, return the first match
+        # print(fhir_response['expansion']['contains'])
+
         if not best_match:
             best_match = fhir_response['expansion']['contains'][0]
     return best_match
 
-llm = Llama(model_path="/Users/alo/llm/llama2/llama-2-13b-chat/ggml-model-q4_0.bin", n_ctx=2048, verbose=False)
+USE_GPU = True
+
+# llm = Llama(model_path="/Users/alo/llm/llama2/llama-2-13b-chat/ggml-model-q4_0.bin", n_ctx=2048, verbose=False)
+MODEL_PATH = "/Users/yoga/llama-cpp/models/llama-2-13b-chat/ggml-model-q4_0.bin"
+
+if USE_GPU:
+    llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=False, n_gpu_layers=128,
+                n_threads=max(1, multiprocessing.cpu_count() - 4), use_mlock=True)
+else:
+    llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=False,
+                n_threads=max(1, multiprocessing.cpu_count() - 2), use_mlock=True)
 
 def simplify(term):
     prompts = [ { "role": "system", "content": """You are a clinical entity simplifier. Respond with simpler forms of the terms provided by the user.
-                 The goal is to make the terms easier to match with SNOMED.
-                 SNOMED is a clinical terminology that does not use plurals or other non-essential words. Remove plurals, and other non-essential words.
-                 Do not include any commentary or explanation in your response. Only a clinical term like a clinician would use."""},
+The goal is to make the terms easier to match with SNOMED.
+SNOMED is a clinical terminology that does not use plurals or other non-essential words. Remove plurals, and other non-essential words.
+Do not include any commentary or explanation in your response. Only a clinical term like a clinician would use."""},
                 {"role":"user", "content":"pain in hands"},
                 {"role":"assistant", "content":"pain in hand"},
                 {"role":"user", "content":"multiple vesicular lesions"},
@@ -54,19 +68,44 @@ def simplify(term):
     response = llm.create_chat_completion(prompts, max_tokens=2048, temperature=0)
     return response["choices"][0]["message"]["content"]
 
+def generalise(term):
+    prompts = [ { "role": "system", "content": """Your task is to answer in a consistent style. Provide a new short an concise medical term without the specificity of the original term. Do not include any commentary or explanation in your response.
+The goal is to make the terms easier to match with SNOMED.
+SNOMED is a clinical terminology that does not use plurals or other non-essential words. Remove plurals, and other non-essential words.
+Do not include any commentary or explanation in your response. Only a clinical term like a clinician would use."""},
+                {"role":"user", "content":"large pleural effusion"},
+                {"role":"assistant", "content":"pleural effusion"},
+                {"role":"user", "content":"intermittent asthma"},
+                {"role":"assistant", "content":"asthma"},
+                {"role":"user", "content":term} ]
+    response = llm.create_chat_completion(prompts, max_tokens=2048, temperature=0)
+    return response["choices"][0]["message"]["content"]
 
 
 extract_prompts = [
-    { "role": "system", "content": """You are a clinical entity extractor. Report results as a JSON array of objects. 
-      Review the clinical notes provided by the user and extract all mentions of symptoms, diagnoses, procedures, and medications. 
-      Don't include demographic information, like "80 years old woman".
-      Don't include any commentary or clarification, only the entities and the requested properties.
-      Provide the following information for each entity:
-       \n  - text: the text of the entity
-       \n  - type: the type of clinical entity (symptom, diagnosis, procedure, medication, etc.)
-       \n  - context: present or absent"""},
+    { "role": "system", "content": """You are a clinical entity extractor. Report results as a JSON array of objects. \
+Review the clinical notes provided by the user and extract all mentions of symptoms, diagnoses, procedures, and medications. \
+Each clinical note is independent. \
+Don't include demographics, commentary or clarification, only entities and the requested properties. \
+Provide the following information for each entity:
+ - text: text of the entity
+ - type: type of clinical entity (symptom, diagnosis, procedure, medication, etc.)
+ - context: present or absent"""},
+    {"role":"user", "content":"A 76-year-old man with a history of chronic back pain presented with dizziness and altered mental status. Laboratory evaluation identified anion-gap metabolic acidosis."},
+    {"role":"assistant", "content":'[{"text":"chronic back pain"}, {"text":"dizziness"}, {"text":"altered mental status"}, {"text":"anion-gap metabolic acidosis"}]'},
     {"role":"user", "content":""}
     ]
+
+# Run the LLM on a test prompt to make sure it's awake
+start_time = time.time()
+print('Running initialisation test')
+response = llm.create_chat_completion([
+    { "role": "system", "content": "You talk."},
+    {"role":"user", "content":"Say hi."}
+    ], max_tokens=4, temperature=0)
+print(repr(response))
+print(COLOR_BLUE, "Elapsed time: ", time.time() - start_time, "Finish reason:", response["choices"][0]["finish_reason"], "Total tokens:", response["usage"]["total_tokens"], COLOR_RESET)
+
 
 # Open the file in read mode
 with open("clinical_text.txt", "r") as file:
@@ -74,7 +113,7 @@ with open("clinical_text.txt", "r") as file:
     for line in file:
         print("----------------------------------------------")
         print(line.strip())
-        extract_prompts[1]["content"] = "Extract clinical entities form this text:\n" + line
+        extract_prompts[-1]["content"] = line
         start_time = time.time()
         response = llm.create_chat_completion(extract_prompts, max_tokens=2048, temperature=0)
         print(COLOR_BLUE, "Elapsed time: ", time.time() - start_time, "Finish reason:", response["choices"][0]["finish_reason"], "Total tokens:", response["usage"]["total_tokens"], COLOR_RESET)
@@ -83,7 +122,13 @@ with open("clinical_text.txt", "r") as file:
         match = re.search(pattern, json_text, re.DOTALL)
         if match:
             json_array = re.search(pattern, json_text, re.DOTALL).group()
-            results = json.loads(json_array)
+            try:
+                results = json.loads(json_array)
+            except json.decoder.JSONDecodeError:
+                print(COLOR_RED, "Invalid or malformed JSON:", json_array, COLOR_RESET)
+                continue
+            if type(results[0]) == str:
+                results = [{"text": text} for text in results]
             # Generate colorized text for output
             detectedTerms = []
             for entity in results:
@@ -102,6 +147,11 @@ with open("clinical_text.txt", "r") as file:
                     if best_match:
                         print(entity["text"],COLOR_YELLOW,"(", simple, ")", COLOR_RESET, ":", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET)
                     else:
-                        print(entity["text"],COLOR_YELLOW,"(", simple, ")", COLOR_RESET, ":", COLOR_RED, "No match", COLOR_YELLOW)
+                        general = generalise(entity["text"])
+                        best_match = match_snomed(general)
+                        if best_match:
+                            print(entity["text"], ":", COLOR_YELLOW, f"( {simple}: {general} )", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET)
+                        else:
+                            print(entity["text"],COLOR_YELLOW, f"( {simple}: {general} )", COLOR_RESET, ":", COLOR_RED, "No match", COLOR_RESET)
         else:
             print(COLOR_RED, "No entities detected", COLOR_RESET)
