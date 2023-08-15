@@ -25,7 +25,7 @@ models = openai.Model.list()
 # print the accesssible text completion models
 print(', '.join(str(model_data.id) for model_data in models.data))
 
-MODEL = "gpt-3.5-turbo-16k"
+MODEL = "gpt-4"
 
 # Recommended for deterministic and foocused output that is 'more likely to be correct and efficient'.
 TEMPERATURE = 0.2
@@ -79,6 +79,34 @@ def generalise(term):
     response = openai.ChatCompletion.create(model=MODEL, messages=prompts, temperature=TEMPERATURE)
     return response["choices"][0]["message"]["content"]
 
+""" You will also be provided with the full clinical phrase that contains the clinical term.
+SNOMED is a clinical terminology that does not use plurals or other non-essential words.
+Provide an assessment of how accurate the representation is on a scale from 1 to 5, where 1 means no meaningful relationship and 5 means identical meaning.
+"""
+"""You are a clinical language evaluator.
+You will be given two clinical terms and you need to assess how closely they are related on a scale from 1 to 5, where 1 means no meaningful relationship and 5 means identical meaning.
+Do not include any commentary or explanation in your response."""
+"""
+
+                {"role":"user", "content":"Term 1: asthma\nTerm 2: Asthma"},
+                {"role":"assistant", "content":"5"},
+                {"role":"user", "content":"Term 1: mild fever\nTerm 2: Fever"},
+                {"role":"assistant", "content":"4"},
+                {"role":"user", "content":"Term 1: secondary renal hypertension\nTerm 2: Hypertensive disorder, systemic arterial"},
+                {"role":"assistant", "content":"3"},
+                {"role":"user", "content":"Term 1: leg cramp\nTerm 2: Pain"},
+                {"role":"assistant", "content":"2"},
+                {"role":"user", "content":"Term 1: vesicular skin rashes\nTerm 2: Male infertility"},
+                {"role":"assistant", "content":"1"},"""
+
+def rate_accuracy(term, snomed_term):
+    prompts = [ {"role":"system", "content": """You are clinical expert, that compares terms doctors write in clinical notes with SNOMED CT terms selected to represent the same meaning.
+You will be given two clinical terms and you need to assess how closely they are related on a scale from 1 to 5, where 1 means no meaningful relationship and 5 means identical meaning.
+Do not include any commentary or explanation in your response.
+"""}, 
+                {"role":"user", "content":f"Clinician's term: {term}\nSnomed term: {snomed_term}"}]
+    response = openai.ChatCompletion.create(model=MODEL, messages=prompts, temperature=TEMPERATURE)
+    return response["choices"][0]["message"]["content"]
 
 extract_prompts = [
     { "role": "system", "content": """You are a clinical entity extractor. Report results as a JSON array of objects. \
@@ -133,18 +161,27 @@ with open("clinical_text.txt", "r") as file:
             for entity in results:
                 best_match = match_snomed(entity["text"])
                 if best_match:
-                    print(entity["text"], ":", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET)
+                    print(entity["text"], ":", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET, end='')
                 else:
                     simple =  simplify(entity["text"])
                     best_match = match_snomed(simple)
                     if best_match:
-                        print(entity["text"],COLOR_YELLOW,"(", simple, ")", COLOR_RESET, ":", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET)
+                        print(entity["text"],COLOR_YELLOW,"(", simple, ")", COLOR_RESET, ":", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET, end='')
                     else:
                         general = generalise(entity["text"])
                         best_match = match_snomed(general)
                         if best_match:
-                            print(entity["text"], ":", COLOR_YELLOW, f"( {simple}: {general} )", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET)
+                            print(entity["text"], ":", COLOR_YELLOW, f"( {simple}: {general} )", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET, end='')
                         else:
                             print(entity["text"],COLOR_YELLOW, f"( {simple}: {general} )", COLOR_RESET, ":", COLOR_RED, "No match", COLOR_RESET)
+                            continue
+            
+                if best_match:
+                    if entity["text"].lower() == best_match["display"].lower():
+                        print(COLOR_BLUE, "(Identical)", COLOR_RESET)
+                    else:
+                        accuracy = rate_accuracy(entity["text"], best_match["display"])
+                        print(COLOR_BLUE, f'(Accuracy rating: {accuracy})', COLOR_RESET)
+                
         else:
             print(COLOR_RED, "No entities detected", COLOR_RESET)
