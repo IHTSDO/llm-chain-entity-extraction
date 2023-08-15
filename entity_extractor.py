@@ -1,4 +1,4 @@
-"""Uses LLMs to extract clinical entities from free text."""
+"""Extracts clinical entities from free text using LLMs."""
 import fhir_api
 from prompts import *
 import json
@@ -9,7 +9,7 @@ import argparse
 DEFAULT_MODEL = 'openai'
 
 # Get system arguments (api, model)
-arg_parser = argparse.ArgumentParser(prog='CT Entity Extractor', description='Extracts entities from clinical text')
+arg_parser = argparse.ArgumentParser(prog='LLM CT Entity Extractor', description='Extracts entities from clinical text using LLMs.')
 arg_parser.add_argument('-a', '--api', default=DEFAULT_MODEL, help='the API to use (options: llama, openai, bard)')
 arg_parser.add_argument('--model', help='the model to run, dependent upon API choice')
 _args = arg_parser.parse_args()
@@ -33,6 +33,9 @@ def create_chat_completion_wrapped(prompt, **kwargs):
 create_chat_completion = create_chat_completion_wrapped
 """
 
+# Constants for the kind of match
+DIRECT_MATCH, SIMPLIFIED_MATCH, GENERALISED_MATCH = range(3)
+
 # ANSI escape sequences for text colors
 COLOR_RED = "\033[91m"
 COLOR_GREEN = "\033[92m"
@@ -46,8 +49,9 @@ def colorize_text(text, replacements, color_code):
         text = pattern.sub(f"{color_code}{word}{COLOR_RESET}", text)
     return text
 
-def display_color(line, entities, terms):
+def display_color(line, entities):
     print(line)
+    print(entities)
 
 server_url = "https://snowstorm.ihtsdotools.org/fhir"
 # server_url = "http://localhost:8080"
@@ -75,17 +79,24 @@ def match_snomed(term):
 
 def rate(term, match, context):
     """Rate the accuracy of the assigned match to the term on a rating of 1 to 5, or 0 if the response is invalid."""
-    response = create_chat_completion("Clinician's term: {}\nSNOMED term: {}\nContext: {}".format(term, match, context), max_tokens=2)
+    if term.lower() == match.lower():
+        return 5
+    accuracy_prompts[-1]['content'] = "Clinician's term: {}\nSNOMED term: {}\nContext: {}".format(term, match, context)
+    response = create_chat_completion(accuracy_prompts, max_tokens=2)
     if response in ('1', '2', '3', '4', '5'):
         return int(response)
     else:
         return 0
 
+def from_prompt(prompts, term):
+    prompts[-1]['content'] = term
+    return prompts
+
 def identify(text):
     """Return the clinical entities in a clinical note or sample of free text."""
+    print(text)
     # Query the model for a chat completion that extracts entities from the text.
-    extract_prompts[-1]['content'] = text
-    json_text = create_chat_completion(extract_prompts)
+    json_text = create_chat_completion(from_prompt(extract_prompts, text))
     pattern = r'\[.*\]'
     # Search for a json array.
     match = re.search(pattern, json_text, re.DOTALL)
@@ -93,19 +104,50 @@ def identify(text):
         json_array = match.group()
         try:
             results = json.loads(json_array)
-        except json.decoder.JSONDecodeError:
+            response_terms = [result['text'] for result in results]
+        except (json.decoder.JSONDecodeError, TypeError):
             print(COLOR_RED, "Invalid or malformed JSON:", json_array, COLOR_RESET)
             return {}
-        response_terms = [result for result in results]
     else:
         return {}
 
     # Dictionary to assign each term a list of information about the match found, confidence and strategy used.
     term_results = {}
 
+    for term in response_terms:
+        term_results[term] = None
+
+        # Look for direct matches with SNOMED CT
+        potential_match = match_snomed(term)
+        if potential_match:
+            rating = rate(term, potential_match['display'], text)
+            term_results[term] = (potential_match, rating, DIRECT_MATCH)
+            if rating > 3:
+                continue
+
+        # Attempt to simplify the term in order to improve on the initial match or find a match
+        simple_term = create_chat_completion(from_prompt(simplify_prompts, term))
+        new_potential_match = match_snomed(term)
+        if new_potential_match != potential_match:
+            new_rating = rate(simple_term, new_potential_match['display'], term)
+            if new_rating > rating:
+                # Set the match or replace the previous match with the new match
+                potential_match, rating = new_potential_match, new_rating
+                term_results[term] = (potential_match, rating, SIMPLIFIED_MATCH, simple_term)
+            if new_rating > 3:
+                continue
+
+        # Attempt to generalise the term
+        general_term = create_chat_completion(from_prompt(generalise_prompts, term))
+        new_potential_match = match_snomed(term)
+        if new_potential_match != potential_match:
+            new_rating = rate(general_term, new_potential_match['display'], term)
+            if new_rating > rating:
+                # Set the match or replace the previous match with the new match
+                term_results[term] = (new_potential_match, new_rating, GENERALISED_MATCH, general_term)
+
     return term_results
 
-        
 
 def main():
     # Initialise the LLM we are using (if required)
@@ -121,7 +163,7 @@ def main():
             continue
 
         entities = identify(line)
-        entities_per_line.append()
+        entities_per_line.append(entities)
         display_color(line, entities)
 
 
