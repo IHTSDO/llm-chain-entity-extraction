@@ -83,6 +83,22 @@ Do not include any commentary or explanation in your response. Only a clinical t
     response = llm.create_chat_completion(prompts, max_tokens=2048, temperature=0)
     return response["choices"][0]["message"]["content"]
 
+def rate_accuracy(term, snomed_code_name, context):
+    prompts = [ {"role":"system", "content": """You are a clinical code verifier. You read clinical phrases and assess whether \
+they match with the selected clinical concepts from SNOMED. You will be given a clinical term and a SNOMED code that was selected as a representation of its meaning by a student.
+SNOMED is a clinical terminology that does not use plurals or other non-essential words. 
+You will also be provided with the full clinical phrase that contains the clinical term.
+Provide an assessment of how accurate the representation is on a scale from 1 to 5, where 1 means no meaningful relationship and 5 means identical meaning.                 
+Do not include any commentary or explanation in your response."""},
+                {"role":"user", "content":"Term: asthma\nSNOMED code: 195967001 |Asthma|\nContext: The patient has asthma and diabetes."},
+                {"role":"assistant", "content":"5"},
+                {"role":"user", "content":"Term: secondary renal hypertension\nSNOMED code: 38341003 |Hypertensive disorder, systemic arterial|\nContext: An 85-years-old woman has hip fracture and secondary renal hypertension."},
+                {"role":"assistant", "content":"3"},
+                {"role":"user", "content":"Term: vesicular skin rashes\nSNOMED code: 2904007 |Male infertility (disorder)|\nContext: A 15-year-old man with fever, cough and vesicular skin rashes that started a week ago was admitted."},
+                {"role":"assistant", "content":"1"},
+                {"role":"user", "content":f"Term: {term}\nSNOMED code: {snomed_code_name}\nContext: {context}"} ]
+    response = llm.create_chat_completion(prompts, max_tokens=2048, temperature=0)
+    return response["choices"][0]["message"]["content"]
 
 extract_prompts = [
     { "role": "system", "content": """You are a clinical entity extractor. Report results as a JSON array of objects. \
@@ -142,18 +158,22 @@ with open("clinical_text.txt", "r") as file:
             for entity in results:
                 best_match = match_snomed(entity["text"])
                 if best_match:
-                    print(entity["text"], ":", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET)
+                    print(entity["text"], ":", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET, end='')
                 else:
                     simple =  simplify(entity["text"])
                     best_match = match_snomed(simple)
                     if best_match:
-                        print(entity["text"],COLOR_YELLOW,"(", simple, ")", COLOR_RESET, ":", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET)
+                        print(entity["text"],COLOR_YELLOW,"(", simple, ")", COLOR_RESET, ":", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET, end='')
                     else:
                         general = generalise(entity["text"])
                         best_match = match_snomed(general)
                         if best_match:
-                            print(entity["text"], ":", COLOR_YELLOW, f"( {simple}: {general} )", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET)
+                            print(entity["text"], ":", COLOR_YELLOW, f"( {simple}: {general} )", COLOR_GREEN, best_match["code"],  best_match["display"], COLOR_RESET, end='')
                         else:
-                            print(entity["text"],COLOR_YELLOW, f"( {simple}: {general} )", COLOR_RESET, ":", COLOR_RED, "No match", COLOR_RESET)
+                            print(entity["text"],COLOR_YELLOW, f"( {simple}: {general} )", COLOR_RESET, ":", COLOR_RED, "No match", COLOR_RESET, end='')
+            
+                if best_match:
+                    accuracy = rate_accuracy(entity["text"], f'{best_match["display"]} |{best_match["code"]}|', line)
+                    print(COLOR_BLUE, "Accuracy rating: ", accuracy, COLOR_RESET)
         else:
             print(COLOR_RED, "No entities detected", COLOR_RESET)
