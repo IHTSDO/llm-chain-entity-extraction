@@ -5,7 +5,8 @@ import time
 import re
 import fhir_api
 
-openai.api_key = "sk-________________________________________________"
+with open('openai.key', 'r') as file:
+    openai.api_key = file.read().rstrip()
 
 # ANSI escape sequences for text colors
 COLOR_RED = "\033[91m"
