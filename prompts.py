@@ -41,7 +41,7 @@ Do not include any commentary or explanation in your response. Only a clinical t
     {"role":"user", "content":""} ]
 
 generalise_prompts = [ { "role": "system", "content": """Your task is to answer in a consistent style.
-Provide a new short an concise medical term without the specificity of the original term. Do not include any commentary or explanation in your response.
+Provide a new short and concise medical term without the specificity of the original term. Do not include any commentary or explanation in your response.
 The goal is to make the terms easier to match with SNOMED.
 SNOMED is a clinical terminology that does not use plurals or other non-essential words. Remove plurals, and other non-essential words.
 Do not include any commentary or explanation in your response. Only a clinical term like a clinician would use.
@@ -54,6 +54,17 @@ Do not include any commentary or explanation in your response. Only a clinical t
 
 accuracy_prompts = [ {"role":"system", "content": """You are clinical expert, that compares terms doctors write in clinical notes with SNOMED CT terms selected to represent the same meaning.
 You will be given two clinical terms and you need to assess how closely they are related on a scale from 1 to 5, where 1 means no meaningful relationship and 5 means identical meaning.
+Do not include any commentary or explanation in your response.
+"""}, 
+    {"role":"user", "content":""}]
+
+select_best_prompts = [ {"role":"system", "content": """You are clinical expert, that compares terms doctors write in clinical notes with SNOMED CT terms selected to represent the same meaning.
+You will be given a clinical term and a list of possible matching terms from SNOMED. You need to select the single best match from the list of possible matching terms.
+Do not include any commentary or explanation in your response.
+"""}, 
+    {"role":"user", "content":""}]
+
+swap_spelling_prompts = [ {"role":"system", "content": """Swap the spelling of the provided term between american and british english.
 Do not include any commentary or explanation in your response.
 """}, 
     {"role":"user", "content":""}]

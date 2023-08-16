@@ -34,7 +34,7 @@ create_chat_completion = create_chat_completion_wrapped
 """
 
 # Constants for the kind of match
-DIRECT_MATCH, SIMPLIFIED_MATCH, GENERALISED_MATCH = range(3)
+NO_MATCH, DIRECT_MATCH, SIMPLIFIED_MATCH, GENERALISED_MATCH = range(4)
 
 # ANSI escape sequences for text colors
 COLOR_RED = "\033[91m"
@@ -44,14 +44,29 @@ COLOR_BLUE = "\033[94m"
 COLOR_RESET = "\033[0m"
 
 def colorize_text(text, replacements, color_code):
+    # space_sequence = r"(\.\,)?(\033\[0m)?\ "  # overwrite COLOR_RESET tags
+    # (?=(
     for word in replacements:
         pattern = re.compile(re.escape(word), re.IGNORECASE)
         text = pattern.sub(f"{color_code}{word}{COLOR_RESET}", text)
     return text
 
 def display_color(line, entities):
-    print(line)
-    print(entities)
+    print(colorize_text(line, entities.keys(), COLOR_GREEN))
+    print(f'({len(entities.keys())} entities found. overlapping matches will not be highlighted. all entities:)')
+    for key, value in entities.items():
+        if value is None or value[2] == NO_MATCH:
+            match, rating, *method_info = value
+            print(f'{key} {COLOR_RED}No match{COLOR_RESET} {method_info}')
+            continue
+        
+        match, rating, *method_info = value
+        color = {5: COLOR_GREEN, 4: COLOR_YELLOW}.get(rating, COLOR_RED)
+
+        print(f'{color}{key}{COLOR_RESET}: {COLOR_BLUE}{match["display"]} |{match["code"]}| {color}(confidence {rating}){COLOR_RESET} {method_info}')
+    # Fail case where entities = {}
+    if not entities:
+        print(f'{COLOR_RED}Could not identify.{COLOR_RESET}')
 
 server_url = "https://snowstorm.ihtsdotools.org/fhir"
 # server_url = "http://localhost:8080"
@@ -74,8 +89,25 @@ def match_snomed(term):
         # print(fhir_response['expansion']['contains'])
 
         if not best_match:
-            best_match = fhir_response['expansion']['contains'][0]
+            list_of_matches = fhir_response['expansion']['contains']
+            best_match = select_most_similar(term, list_of_matches)
+
     return best_match
+
+def select_most_similar(term, list_of_matches):
+    list_of_names = [match['display'] for match in list_of_matches]
+    comma_separated_list_of_names = ', '.join(list_of_names)
+    select_best_prompts[-1]['content'] = "Clinician's term: {}\nPossible matches from SNOMED: {}".format(term, comma_separated_list_of_names)
+    response = create_chat_completion(select_best_prompts, max_tokens=16)
+
+    if response in list_of_names:
+        for match in list_of_matches:
+            if match['display'].lower() == response.lower():
+                return match
+        else:
+            return list_of_matches[0]
+    else:
+        return list_of_matches[0]
 
 def rate(term, match, context):
     """Rate the accuracy of the assigned match to the term on a rating of 1 to 5, or 0 if the response is invalid."""
@@ -115,36 +147,59 @@ def identify(text):
     term_results = {}
 
     for term in response_terms:
-        term_results[term] = None
+        term_results[term] = ['', 0, NO_MATCH]
 
         # Look for direct matches with SNOMED CT
         potential_match = match_snomed(term)
         if potential_match:
             rating = rate(term, potential_match['display'], text)
-            term_results[term] = (potential_match, rating, DIRECT_MATCH)
+            term_results[term] = [potential_match, rating, DIRECT_MATCH]
             if rating > 3:
                 continue
+        else:
+            # Always replace
+            rating = -1
 
         # Attempt to simplify the term in order to improve on the initial match or find a match
         simple_term = create_chat_completion(from_prompt(simplify_prompts, term))
-        new_potential_match = match_snomed(term)
-        if new_potential_match != potential_match:
+        term_results[term].append(simple_term)
+
+        new_potential_match = match_snomed(simple_term)
+        # Don't repeat queries to the LLM (implicitly: skip if both entries are None)
+        if new_potential_match is not None and new_potential_match != potential_match:
             new_rating = rate(simple_term, new_potential_match['display'], term)
             if new_rating > rating:
                 # Set the match or replace the previous match with the new match
                 potential_match, rating = new_potential_match, new_rating
-                term_results[term] = (potential_match, rating, SIMPLIFIED_MATCH, simple_term)
+                term_results[term] = [potential_match, rating, SIMPLIFIED_MATCH, simple_term]
             if new_rating > 3:
                 continue
 
         # Attempt to generalise the term
         general_term = create_chat_completion(from_prompt(generalise_prompts, term))
-        new_potential_match = match_snomed(term)
-        if new_potential_match != potential_match:
+        term_results[term].append(general_term)
+
+        new_potential_match = match_snomed(general_term)
+        if new_potential_match is not None and new_potential_match != potential_match:
+            term_results[term].append(general_term)
             new_rating = rate(general_term, new_potential_match['display'], term)
             if new_rating > rating:
                 # Set the match or replace the previous match with the new match
-                term_results[term] = (new_potential_match, new_rating, GENERALISED_MATCH, general_term)
+                term_results[term] = [new_potential_match, new_rating, GENERALISED_MATCH, simple_term, general_term]
+            if new_rating > 3:
+                continue
+
+        # Attempts to swap US/British spelling
+        respelled_term = create_chat_completion(from_prompt(swap_spelling_prompts, simple_term), max_tokens=64)
+        term_results[term].append(respelled_term)
+
+        new_potential_match = match_snomed(respelled_term)
+        if new_potential_match is not None and new_potential_match != potential_match:
+            term_results[term].append(respelled_term)
+            new_rating = rate(respelled_term, new_potential_match['display'], term)
+            if new_rating > rating:
+                # Set the match or replace the previous match with the new match
+                term_results[term] = [new_potential_match, new_rating, GENERALISED_MATCH, simple_term, general_term, respelled_term]
 
     return term_results
 
