@@ -34,7 +34,7 @@ create_chat_completion = create_chat_completion_wrapped
 """
 
 # Constants for the kind of match
-NO_MATCH, DIRECT_MATCH, SIMPLIFIED_MATCH, GENERALISED_MATCH = range(4)
+NO_MATCH, DIRECT_MATCH, SIMPLIFIED_MATCH, GENERALISED_MATCH, RESPELLED_MATCH = range(5)
 
 # ANSI escape sequences for text colors
 COLOR_RED = "\033[91m"
@@ -91,7 +91,9 @@ def match_snomed(term):
         if not best_match:
             list_of_matches = fhir_response['expansion']['contains']
             best_match = select_most_similar(term, list_of_matches)
-
+    else:
+        print(COLOR_RED, 'Unable to get fhir response. Using blank codes.', COLOR_RESET, sep='')
+        best_match = {'display': str.capitalize(term) + '*', 'code': 'Unavailable'}
     return best_match
 
 def select_most_similar(term, list_of_matches):
@@ -114,10 +116,13 @@ def rate(term, match, context):
     if term.lower() == match.lower():
         return 5
     accuracy_prompts[-1]['content'] = "Clinician's term: {}\nSNOMED term: {}\nContext: {}".format(term, match, context)
-    response = create_chat_completion(accuracy_prompts, max_tokens=2)
+    response = create_chat_completion(accuracy_prompts, max_tokens=2).strip()
     if response in ('1', '2', '3', '4', '5'):
         return int(response)
+    elif match := re.match('[1-5](\.\d)?', response):
+        return int(float(match.string) // 1)  # or math.floor
     else:
+        print(COLOR_RED, f'Invalid rating response: {response}', COLOR_RESET)
         return 0
 
 def from_prompt(prompts, term):
@@ -148,6 +153,7 @@ def identify(text):
 
     for term in response_terms:
         term_results[term] = ['', 0, NO_MATCH]
+        print(f'Matching: {term}'.ljust(80), end='\r')
 
         # Look for direct matches with SNOMED CT
         potential_match = match_snomed(term)
@@ -158,10 +164,10 @@ def identify(text):
                 continue
         else:
             # Always replace
-            rating = -1
+            rating = 0
 
         # Attempt to simplify the term in order to improve on the initial match or find a match
-        simple_term = create_chat_completion(from_prompt(simplify_prompts, term))
+        simple_term = create_chat_completion(from_prompt(simplify_prompts, term), max_tokens=16)
         term_results[term].append(simple_term)
 
         new_potential_match = match_snomed(simple_term)
@@ -176,7 +182,7 @@ def identify(text):
                 continue
 
         # Attempt to generalise the term
-        general_term = create_chat_completion(from_prompt(generalise_prompts, term))
+        general_term = create_chat_completion(from_prompt(generalise_prompts, term), max_tokens=16)
         term_results[term].append(general_term)
 
         new_potential_match = match_snomed(general_term)
@@ -190,7 +196,7 @@ def identify(text):
                 continue
 
         # Attempts to swap US/British spelling
-        respelled_term = create_chat_completion(from_prompt(swap_spelling_prompts, simple_term), max_tokens=64)
+        respelled_term = create_chat_completion(from_prompt(swap_spelling_prompts, simple_term), max_tokens=16)
         term_results[term].append(respelled_term)
 
         new_potential_match = match_snomed(respelled_term)
@@ -199,7 +205,7 @@ def identify(text):
             new_rating = rate(respelled_term, new_potential_match['display'], term)
             if new_rating > rating:
                 # Set the match or replace the previous match with the new match
-                term_results[term] = [new_potential_match, new_rating, GENERALISED_MATCH, simple_term, general_term, respelled_term]
+                term_results[term] = [new_potential_match, new_rating, RESPELLED_MATCH, simple_term, general_term, respelled_term]
 
     return term_results
 
