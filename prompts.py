@@ -74,6 +74,22 @@ Do not include any commentary or explanation in your response, only the new spel
 """}, 
     {"role":"user", "content":""}]
 
+language_prompts = [ {"role":"system", "content": """Tell me the language in which this extract from a clinical note is written, without translating the text.
+Do not include any commentary or explanation in your response, only the name of the language.
+"""},
+    {"role":"user", "content":""}]
+
+translate_es_en_prompts = [ {"role":"system", "content": """Translate this text from Spanish to English.
+Do not include any commentary or explanation in your response.
+"""},
+    {"role":"user", "content":""}]
+
+translate_en_prompts = [ {"role":"system", "content": """Translate this text to English.
+Do not include any commentary or explanation in your response.
+"""},
+    {"role":"user", "content":""}]
+
+
 def convert_chat_to_message(prompts):
     if len(prompts) == 2:  # Zero-shot
         message = f'{prompts[0]["content"]}\nText: """\n{prompts[1]["content"]}\n"""'

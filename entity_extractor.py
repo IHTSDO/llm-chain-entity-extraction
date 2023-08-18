@@ -113,10 +113,14 @@ def select_most_similar(term, list_of_matches):
 
 def rate(term, match, context):
     """Rate the accuracy of the assigned match to the term on a rating of 1 to 5, or 0 if the response is invalid."""
+    # gpt-4 can follow the no explanations rule but the other models sometimes do not,
+    # so we allow a longer response and extract the rating from it.
+    max_tokens_for_rating = 1 if llm_api=='openai' else 16
+
     if term.lower() == match.lower():
         return 5
     accuracy_prompts[-1]['content'] = "Clinician's term: {}\nSNOMED term: {}\nContext: {}".format(term, match, context)
-    response = create_chat_completion(accuracy_prompts, max_tokens=2).strip()
+    response = create_chat_completion(accuracy_prompts, max_tokens=max_tokens_for_rating).strip()
     if response in ('1', '2', '3', '4', '5'):
         return int(response)
     elif match := re.match('[1-5](\.\d)?', response):
@@ -125,6 +129,23 @@ def rate(term, match, context):
         print(COLOR_RED, f'Invalid rating response: {response}', COLOR_RESET)
         return 0
 
+def translate_to_english(text):
+    """Return the text translated to English (if required)."""
+    # Get a short piece of the text (up to 48 characters). Cut it off at a word or sentence boundary.
+    text_extract = ' '.join(text[:48].split(' ')[:-1])
+    # Use the extract from the text to detect the language.
+    response = create_chat_completion(from_prompt(language_prompts, text_extract), max_tokens=16).strip().lower()
+    # If the language isn't English, translate the text depending on the language detected.
+    if 'en' in response:
+        print(f'Language: {response}')
+    elif 'es' in response or 'spanish' in response:
+        text = create_chat_completion(from_prompt(translate_es_en_prompts, text))
+        print(f'Language: {response} ({COLOR_BLUE}translating es -> en{COLOR_RESET})')
+    else:
+        text = create_chat_completion(from_prompt(translate_en_prompts, text))
+        print(f'Language: {response} (unexpected response; {COLOR_BLUE}translating any language -> en{COLOR_RESET})')
+    return text
+
 def from_prompt(prompts, term):
     prompts[-1]['content'] = term
     return prompts
@@ -132,6 +153,7 @@ def from_prompt(prompts, term):
 def identify(text):
     """Return the clinical entities in a clinical note or sample of free text."""
     print(text)
+
     # Query the model for a chat completion that extracts entities from the text.
     json_text = create_chat_completion(from_prompt(extract_prompts, text))
     pattern = r'\[.*\]'
@@ -213,7 +235,7 @@ def identify(text):
 def main():
     # Initialise the LLM we are using (if required)
     # Read the test cases (hide blank lines)
-    with open("clinical_text.txt", "r") as file:
+    with open("clinical_lang_text.txt", "r") as file:
         lines = map(str.strip, file.readlines())
     
     entities_per_line = []
@@ -222,10 +244,11 @@ def main():
     for line in lines:
         if not line or line.startswith('#'):  # skip newlines and comments/titles
             continue
-
-        entities = identify(line)
+        
+        text = translate_to_english(line)  # translate text in other languages to english
+        entities = identify(text)  # identify entities
         entities_per_line.append(entities)
-        display_color(line, entities)
+        display_color(text, entities)
 
 
 if __name__ == "__main__":
