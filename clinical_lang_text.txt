@@ -1,3 +1,9 @@
-Me parece que hay algunos movimientos que lo empeoren.
-Der Mann, der 30 Jahre alt ist, hat starkes Fieber und Kopfschmerzen.
-A 45-year-old. L'uomo ha sintomi di demenza. Il parle plusieurs langues. Sein Arm tut weh.
+# Examples in es/de/fr
+Mi pierna derecha tiene una erupción y me duele. Me parece que hay algunos movimientos que lo empeoran.
+Der Mann, der 30 Jahre alt ist, hat starkes Fieber und Kopfschmerzen. Sein linker Arm tut weh.
+Une femme de 65 ans souffrant de dépression a présenté une aggravation des symptômes neuropsychiatriques, une perte de poids, une démarche instable, des chutes récurrentes et une progression de la faiblesse du côté gauche pendant plusieurs mois.
+
+# Extract from Cantemist corpus: gold standard of oncology clinical cases annotated with CIE-O 3 terminology
+# Retrieved from https://zenodo.org/record/3978041#.YTt5qH2xXbQ
+Con el fin de alcanzar un diagnóstico, se llevó a cabo una biopsia percutánea mediante TC del nódulo pulmonar localizado en la base pulmonar izquierda.
+El estudio anatomopatológico fue concordante con un Adenocarcinoma infiltrante pulmonar TTF1 positivo, PD-L1 del 90% en células tumorales, EGFR negativo, ALK negativo y ROS-1 negativo.

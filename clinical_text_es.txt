@@ -1,0 +1,18 @@
+# Extract from Cantemist corpus: gold standard of oncology clinical cases annotated with CIE-O 3 terminology
+# Retrieved from https://zenodo.org/record/3978041#.YTt5qH2xXbQ
+# This is an extract of the first annotation under tests, split by sentences, and with the subtitles labelled to be skipped.
+
+# ANATOMÍA PATOLÓGICA
+Con el fin de alcanzar un diagnóstico, se llevó a cabo una biopsia percutánea mediante TC del nódulo pulmonar localizado en la base pulmonar izquierda.
+El estudio anatomopatológico fue concordante con un Adenocarcinoma infiltrante pulmonar TTF1 positivo, PD-L1 del 90% en células tumorales, EGFR negativo, ALK negativo y ROS-1 negativo.
+
+# JUICIO DIAGNÓSTICO
+Por lo tanto, el diagnóstico definitivo de nuestro paciente fue de un Adenocarcinoma de pulmón cT2a cN3 cM1a Estadio IV (por una única lesión pulmonar contralateral) PD-L1 90%, EGFR negativo, ALK negativo y ROS-1 negativo.
+
+# TRATAMIENTO
+Se ofreció al paciente el tratamiento estándar de primer línea para carcinomas pulmonares no microcíticos con expresión de PD-L1 superior al 50% y con el resto del estudio molecular negativo.
+El 17 de diciembre del 2018 se administró el primer ciclo con Pembrolizumab a dosis de 200 mg.
+
+# EVOLUCIÓN
+Tras el inicio de la corticoterapia, se solventó por completo la sintomatología reumatológica.
+Dados los indicios razonables de la pérdida de eficacia de la inmunoterapia con tratamientos corticoideos previos en pacientes afectos de carcinomas no microcíticos de pulmón, se inició una pauta descendente de la prednisona desde la primera visita en Oncología Médica.
