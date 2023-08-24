@@ -1,6 +1,6 @@
 import requests
 
-def expand_valueset(server_url, valueset_url, filter_value=None):
+def expand_valueset(server_url, valueset_url, filter_value=None, fuzzy_match=True):
     headers = {'User-Agent': 'Implementation Team AI testing (Llama LLM)'}
 
     # Define the operation endpoint
@@ -35,6 +35,9 @@ def expand_valueset(server_url, valueset_url, filter_value=None):
     else:
         print("Error:", response.status_code)
         print(response.text)
+
+
+
 
 # Example usage
 # server_url = "https://snowstorm.ihtsdotools.org/fhir"

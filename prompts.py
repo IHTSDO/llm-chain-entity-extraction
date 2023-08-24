@@ -103,10 +103,10 @@ Do not include any commentary or explanation in your response, only the term whi
 """}, 
     {"role":"user", "content":""}]
 
-swap_spelling_prompts = [ {"role":"system", "content": """You will given a medical term and its context. Respell the provided term, by first swapping the spelling between American English and British English, then removing complex adjectives.
-Do not include any commentary or explanation in your response, only the new spelling of the new term.
-"""}, 
-    {"role":"user", "content":""}]
+#swap_spelling_prompts = [ {"role":"system", "content": """You will given a medical term and its context. Respell the provided term, by first swapping the spelling between American English and British English, then removing complex adjectives.
+#Do not include any commentary or explanation in your response, only the new spelling of the new term.
+#"""}, 
+#    {"role":"user", "content":""}]
 
 language_prompts = [ {"role":"system", "content": """Tell me the language in which this extract from a clinical note is written, without translating the text.
 Do not include any commentary or explanation in your response, only the name of the language.

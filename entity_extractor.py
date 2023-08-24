@@ -6,7 +6,7 @@ import time
 import re
 import argparse
 
-DEFAULT_MODEL = 'llama'
+DEFAULT_MODEL = 'openai'
 
 # Get system arguments (api, model)
 arg_parser = argparse.ArgumentParser(prog='LLM CT Entity Extractor', description='Extracts entities from clinical text using LLMs.')
@@ -71,9 +71,11 @@ def display_color(line, entities, time_taken):
 
     print(COLOR_BLUE, '---', COLOR_RESET)
 
-server_url = "https://snowstorm.ihtsdotools.org/fhir"
+server_url = "https://snowstorm-micro.nw.r.appspot.com"
+# server_url = "https://snowstorm.ihtsdotools.org/fhir"
 # server_url = "http://localhost:8080"
-valueset_url = "http://snomed.info/sct/900000000000207008/version/20230630?fhir_vs"
+valueset_url = "http://snomed.info/sct?fhir_vs=isa/138875005"
+# valueset_url = "http://snomed.info/sct/900000000000207008/version/20230630?fhir_vs"
 # valueset_url = "http://snomed.info/sct?fhir_vs=isa/138875005"
 
 def match_snomed(term, context=None):
@@ -88,6 +90,7 @@ def match_snomed(term, context=None):
         if 'contains' in fhir_response['expansion'] and len(fhir_response['expansion']['contains']) > 0:
             # Check if there is a case insensitive exact match in fhir_response['expansion']['contains']
             list_of_matches = fhir_response['expansion']['contains']
+            # print([item['display'] for item in list_of_matches])
             for item in list_of_matches:
                 if item['display'].lower() == term.lower():
                     best_match = item
@@ -134,7 +137,7 @@ def rate(term, match, context):
     if response in ('1', '2', '3', '4', '5'):
         return int(response)
     elif string := extract_first_digit_in_range_final(response): #match := re.match('[1-5](\.\d)?', response):
-        print(COLOR_BLUE, f'Match response: {response}', COLOR_RESET)
+        print(COLOR_BLUE, f'Match response: {response[:40]} ...', COLOR_RESET, '->', string)
         return int(float(string) // 1)  # or math.floor
     else:
         print(COLOR_RED, f'Invalid rating response: {response}', COLOR_RESET)
@@ -173,7 +176,7 @@ def from_prompt(prompts, term):
 
 def identify(text):
     """Return the clinical entities in a clinical note or sample of free text."""
-    print(text)
+    # print(text)
 
     # Query the model for a chat completion that extracts entities from the text.
     json_text = create_chat_completion(from_prompt(extract_prompts, text))
@@ -236,26 +239,9 @@ def identify(text):
                 # Set the match or replace the previous match with the new match
                 potential_match, rating = new_potential_match, new_rating
                 term_results[term] = [new_potential_match, new_rating, GENERALISED_MATCH, simple_term, general_term]
-            # We use a lower threshold, since the respelling step should only be used if our current match is poor
+            # We use a lower threshold, since later steps should only be used if our current match is poor
             if new_rating >= 3:
                 continue
-
-        term_and_context = 'Term: {}\nContext: {}'.format(
-            general_term, text if general_term == term else term)
-
-        # Attempts to swap US/British spelling
-        respelled_term = create_chat_completion(from_prompt(swap_spelling_prompts, term_and_context), max_tokens=16)
-        # Remove any formatting that the LLM may have added
-        respelled_term = respelled_term.removeprefix('Term:').split('Context:', maxsplit=1)[0].strip()
-        term_results[term].append(respelled_term)
-
-        # We search using the respelled term but still pick the best match based on our original term
-        new_potential_match = match_snomed(respelled_term, context=term)
-        if new_potential_match is not None and new_potential_match != potential_match:
-            new_rating = rate(respelled_term, new_potential_match['display'], term)
-            if new_rating > rating:
-                # Set the match or replace the previous match with the new match
-                term_results[term] = [new_potential_match, new_rating, RESPELLED_MATCH, simple_term, general_term, respelled_term]
 
     return term_results
 
@@ -263,7 +249,7 @@ def identify(text):
 def main():
     # Initialise the LLM we are using (if required)
     # Read the test cases (hide blank lines)
-    with open("clinical_text_2.txt", "r") as file:
+    with open("clinical_text_3.txt", "r") as file:
         stripped_lines = map(str.rstrip, file.readlines())
     # skip newlines and comments/titles    
     lines = [line for line in stripped_lines if line and not line.startswith('#')]
@@ -274,6 +260,7 @@ def main():
 
     # Iterate over each line in the test cases
     for line in lines:
+        print(COLOR_BLUE, line, COLOR_RESET, sep='')
         start_time = time.time()
         text = as_english(line, language)  # translate text in other languages to english
         entities = identify(text)  # identify entities
