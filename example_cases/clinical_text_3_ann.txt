@@ -1,0 +1,40 @@
+sarcoidosis 31541009 |Sarcoidosis (disorder)|
+heart disease  56265001 |Heart disease (disorder)|
+diplopia   24982008 |Diplopia (disorder)|
+weakness   13791008 |Asthenia (finding)|
+;;
+422587007 |Nausea (finding)|
+404640003 |Dizziness (finding)|
+60862001 |Tinnitus (finding)|
+22631008 |Unsteady when walking (finding)|
+386661006 |Fever (finding)|
+;;
+275498002 |Respiratory tract infection (disorder)|
+232297009 |Disorder of inner ear (disorder)|
+;;
+422587007 |Nausea|
+422400008 |Vomiting|
+40917007 |Clouded consciousness|
+89627008 |Hyponatremia|
+;;
+She did not seek medical care, and her symptoms resolved after several hours.
+;;
+422587007 |Nausea (finding)|
+422400008 |Vomiting (disorder)|
+;;
+185211000 |Seen in hospital outpatient department (finding)|
+300954003 |Pain in calf (finding)|
+281792000 |Swollen calf (finding)|
+284078000 |Purpuric rash (disorder)|
+;;
+249366005 |Bleeding from nose (finding)|
+43878008 |Streptococcal sore throat (disorder)|
+;;
+409081008 |Malarial parasite detection test (procedure)|
+408195004 |Thick film for malarial parasites (procedure)|
+;;
+90332006 |Product containing paracetamol (medicinal product)|
+38268001 |Product containing ibuprofen (medicinal product)|
+;;
+301716002 |Left lower quadrant pain (finding)|
+1003721002 |Pain of joint of knee (finding)|
