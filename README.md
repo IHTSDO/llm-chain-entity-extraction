@@ -14,9 +14,7 @@ The entity_extractor.py script extracts clinical entities from free text using L
 ### Prerequisites
 To run the entity_extractor.py script, you will need:
 - Python 3.x
-- The fhir_api module
-- The argparse module
-- An API key for OpenAI Api (optional, Llama2 is local will not require an API key)
+- Optional: An API key for OpenAI Api
   
 ### Usage
 To use the entity_extractor.py script, follow these steps:
@@ -24,7 +22,7 @@ To use the entity_extractor.py script, follow these steps:
 - Clone the repository to your local machine.
 - Open the project in your preferred code editor.
 - Install any necessary dependencies by running pip install -r requirements.txt in your terminal.
-- Save your OpenAI API key in a file named "openai.key".
+- If you need to use OpenAI models, save your OpenAI API key in a file named "openai.key".
 - Run the script by typing python entity_extractor.py -a <api> --model <model> in your terminal, where <api> is the name of the LLM API you want to use (openai, bard, or llama) and <model> is the name of the model you want to run (dependent upon API choice).
 - View the output in the terminal or in the output pane of your code editor.
 
