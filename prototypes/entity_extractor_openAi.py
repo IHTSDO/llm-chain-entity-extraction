@@ -31,8 +31,7 @@ MODEL = "gpt-4"
 # Recommended for deterministic and foocused output that is 'more likely to be correct and efficient'.
 TEMPERATURE = 0.2
 
-server_url = "https://snowstorm.ihtsdotools.org/fhir"
-# server_url = "http://localhost:8080"
+server_url = "http://localhost:8080"
 valueset_url = "http://snomed.info/sct/900000000000207008/version/20230630?fhir_vs"
 # valueset_url = "http://snomed.info/sct?fhir_vs=isa/138875005"
 

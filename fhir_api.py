@@ -40,7 +40,7 @@ def expand_valueset(server_url, valueset_url, filter_value=None, fuzzy_match=Tru
 
 
 # Example usage
-# server_url = "https://snowstorm.ihtsdotools.org/fhir"
+# server_url = ""
 # valueset_url = "http://snomed.info/sct/900000000000207008/version/20230630?fhir_vs"
 # filter_value = "asthma"
 

@@ -72,7 +72,6 @@ def display_color(line, entities, time_taken):
     print(COLOR_BLUE, '---', COLOR_RESET)
 
 server_url = "https://snowstorm-micro.nw.r.appspot.com"
-# server_url = "https://snowstorm.ihtsdotools.org/fhir"
 # server_url = "http://localhost:8080"
 valueset_url = "http://snomed.info/sct?fhir_vs=isa/138875005"
 # valueset_url = "http://snomed.info/sct/900000000000207008/version/20230630?fhir_vs"
