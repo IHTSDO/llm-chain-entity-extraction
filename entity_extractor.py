@@ -11,14 +11,17 @@ DEFAULT_MODEL = 'openai'
 # Get system arguments (api, model)
 arg_parser = argparse.ArgumentParser(prog='LLM CT Entity Extractor', description='Extracts entities from clinical text using LLMs.')
 arg_parser.add_argument('-a', '--api', default=DEFAULT_MODEL, help='the API to use (options: llama, openai, bard)')
-arg_parser.add_argument('--model', help='the model to run, dependent upon API choice')
+arg_parser.add_argument('--model', help='the model to run, dependent upon API choice. Path to model in Llama2.0, model name in OpenAI, or model name in BARD.')
+arg_parser.add_argument('--sentences', help='path to a set of free text clinical sentences to encode with SNOMED CT.')
 _args = arg_parser.parse_args()
 llm_api = _args.api.lower()
 
 # Conditionally import the chat completion function which uses the given API
 if llm_api == 'llama':
+    from completion_llama import initialize_model
     from completion_llama import create_chat_completion
     accuracy_prompts = accuracy_prompts_llama
+    initialize_model(_args.model)
 elif llm_api == 'openai':
     from completion_openai import create_chat_completion
 elif llm_api == 'bard':
@@ -71,13 +74,14 @@ def display_color(line, entities, time_taken):
 
     print(COLOR_BLUE, '---', COLOR_RESET)
 
-server_url = "https://snowstorm-micro.nw.r.appspot.com"
+server_url = "https://snowstorm-micro.nw.r.appspot.com/fhir"
 # server_url = "http://localhost:8080"
 valueset_url = "http://snomed.info/sct?fhir_vs=isa/138875005"
 # valueset_url = "http://snomed.info/sct/900000000000207008/version/20230630?fhir_vs"
 # valueset_url = "http://snomed.info/sct?fhir_vs=isa/138875005"
 
 def match_snomed(term, context=None):
+    print(f'Searching: {term}'.ljust(80), end='\r')
     # skip it term length is less than 3
     if len(term) < 3 or len(term) > 100:
         return None
@@ -89,7 +93,6 @@ def match_snomed(term, context=None):
         if 'contains' in fhir_response['expansion'] and len(fhir_response['expansion']['contains']) > 0:
             # Check if there is a case insensitive exact match in fhir_response['expansion']['contains']
             list_of_matches = fhir_response['expansion']['contains']
-            # print([item['display'] for item in list_of_matches])
             for item in list_of_matches:
                 if item['display'].lower() == term.lower():
                     best_match = item
@@ -108,6 +111,8 @@ def match_snomed(term, context=None):
     return best_match
 
 def select_most_similar(term, list_of_matches):
+    term = clean_string(term)
+    print(f'Selecting best match by similarity'.ljust(80), end='\r')
     list_of_names = [match['display'] for match in list_of_matches]
     comma_separated_list_of_names = ', '.join(list_of_names)
     select_best_prompts[-1]['content'] = "Clinician's term: {}\nPossible matches from SNOMED: {}".format(term, comma_separated_list_of_names)
@@ -123,6 +128,7 @@ def select_most_similar(term, list_of_matches):
         return list_of_matches[0]
 
 def rate(term, match, context):
+    print(f'Rating: {term} vs. {match}'.ljust(80), end='\r')
     """Rate the accuracy of the assigned match to the term on a rating of 1 to 5, or 0 if the response is invalid."""
     # gpt-4 can follow the no explanations rule but the other models sometimes do not,
     # so we allow a longer response and extract the rating from it.
@@ -136,7 +142,6 @@ def rate(term, match, context):
     if response in ('1', '2', '3', '4', '5'):
         return int(response)
     elif string := extract_first_digit_in_range_final(response): #match := re.match('[1-5](\.\d)?', response):
-        print(COLOR_BLUE, f'Match response: {response[:40]} ...', COLOR_RESET, '->', string)
         return int(float(string) // 1)  # or math.floor
     else:
         print(COLOR_RED, f'Invalid rating response: {response}', COLOR_RESET)
@@ -175,8 +180,7 @@ def from_prompt(prompts, term):
 
 def identify(text):
     """Return the clinical entities in a clinical note or sample of free text."""
-    # print(text)
-
+    print(f'Identifying entities'.ljust(80), end='\r')
     # Query the model for a chat completion that extracts entities from the text.
     json_text = create_chat_completion(from_prompt(extract_prompts, text))
     pattern = r'\[.*\]'
@@ -211,8 +215,14 @@ def identify(text):
             # Always replace
             rating = 0
 
+        print(f'Simplifying: {term}'.ljust(80), end='\r')
         # Attempt to simplify the term in order to improve on the initial match or find a match
         simple_term = create_chat_completion(from_prompt(simplify_prompts, term), max_tokens=16)
+        # ignore text after a new line
+        simple_term = simple_term.split('\n')[0]
+        # clean the string
+        simple_term = clean_string(simple_term)
+
         term_results[term].append(simple_term)
 
         new_potential_match = match_snomed(simple_term, context=term)
@@ -226,6 +236,7 @@ def identify(text):
             if new_rating > 3:
                 continue
 
+        print(f'Generalizing: {term}'.ljust(80), end='\r')
         # Attempt to generalise the term
         general_term = create_chat_completion(from_prompt(generalise_prompts, term), max_tokens=16)
         term_results[term].append(general_term)
@@ -244,29 +255,41 @@ def identify(text):
 
     return term_results
 
+def clean_string(s):
+    # Remove trailing and leading whitespace
+    s = s.strip()
+    # Replace multiple newlines with a single newline
+    s = re.sub('\n+', '\n', s)
+    # Replace multiple spaces with a single space
+    s = re.sub(' +', ' ', s)
+    return s
 
 def main():
     # Initialise the LLM we are using (if required)
     # Read the test cases (hide blank lines)
-    with open("clinical_text_3.txt", "r") as file:
-        stripped_lines = map(str.rstrip, file.readlines())
-    # skip newlines and comments/titles    
-    lines = [line for line in stripped_lines if line and not line.startswith('#')]
+    # check if sentences argument is set
+    if _args.sentences:
+        with open(_args.sentences, "r") as file:
+            stripped_lines = map(str.rstrip, file.readlines())
+        # skip newlines and comments/titles    
+        lines = [line for line in stripped_lines if line and not line.startswith('#')]
+        
+        start_time_all_cases = time.time()
+        entities_per_line = []
+        language = identify_language(lines)
+
+        # Iterate over each line in the test cases
+        for line in lines:
+            print(COLOR_BLUE, line, COLOR_RESET, sep='')
+            start_time = time.time()
+            text = as_english(line, language)  # translate text in other languages to english
+            entities = identify(text)  # identify entities
+            entities_per_line.append(entities)
+            display_color(text, entities, time.time() - start_time)
+
+        print(COLOR_BLUE, time.time() - start_time_all_cases, 's', COLOR_RESET, sep='')
+    else:
+        raise ValueError('Please provide a path to a set of free text clinical sentences to encode with SNOMED CT.')
     
-    start_time_all_cases = time.time()
-    entities_per_line = []
-    language = identify_language(lines)
-
-    # Iterate over each line in the test cases
-    for line in lines:
-        print(COLOR_BLUE, line, COLOR_RESET, sep='')
-        start_time = time.time()
-        text = as_english(line, language)  # translate text in other languages to english
-        entities = identify(text)  # identify entities
-        entities_per_line.append(entities)
-        display_color(text, entities, time.time() - start_time)
-
-    print(COLOR_BLUE, time.time() - start_time_all_cases, 's', COLOR_RESET, sep='')
-
 if __name__ == "__main__":
     main()

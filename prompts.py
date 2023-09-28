@@ -11,8 +11,8 @@ Diagnoses: ...
 Procedures: ...
 Medications: ...
 """},
-    {"role":"user", "content":"A 76-year-old man with a history of chronic back pain presented with dizziness and altered mental status. Laboratory evaluation identified anion-gap metabolic acidosis."},
-    {"role":"assistant", "content":'[{"text":"chronic back pain"}, {"text":"dizziness"}, {"text":"altered mental status"}, {"text":"anion-gap metabolic acidosis"}]'},
+    {"role":"user", "content":"A 76-year-old man with a history of chronic back pain presented with dizziness and altered mental status. A colonoscopy evidenced ulcerative colitis."},
+    {"role":"assistant", "content":'[{"text":"chronic back pain"}, {"text":"dizziness"}, {"text":"altered mental status"}, {"text":"anion-gap metabolic acidosis"}, {"text":"colonoscopy"}, {"text":"ulcerative colitits"}]'},
     {"role":"user", "content":""} ]
 
 extract_prompts = [
