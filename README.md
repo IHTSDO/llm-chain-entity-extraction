@@ -5,7 +5,7 @@ LLM Chains allow us to divide a complex task into a Chain of smaller tasks, wher
 This is not significantly slower, despite requiring a greater number of calls/requests to the LLM, because short outputs take a proportionally shorter time to generate. Although the input prompt tokens also need to be processed each time, they are less time-expensive than output generated tokens in the case of LLaMA 2.
 
 ## Chain design
-<img width="800" alt="image" src="https://github.com/IHTSDO/llm-chain-entity-extraction/assets/4990842/f90239b8-40e8-473d-9f1c-ff42f498785f">
+<img width="800" alt="image" src="https://github.com/IHTSDO/llm-chain-entity-extraction/assets/4990842/bc520330-62d3-4bb6-8d37-6638df721587">
 
 
 ## How to run the Entity Extractor
