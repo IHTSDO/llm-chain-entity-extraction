@@ -14,7 +14,8 @@ The entity_extractor.py script extracts clinical entities from free text using L
 ### Prerequisites
 To run the entity_extractor.py script, you will need:
 - Python 3.x
-- Optional: An [API key](https://help.openai.com/en/articles/4936850-where-do-i-find-my-secret-api-key) for OpenAI Api
+- OpenAI: An API key for OpenAI Api (see https://openai.com/blog/openai-api)
+- Llama-2: Llama.cpp installed, and a local copy of Llama-2, quantized for use in llama.cpp (see https://github.com/ggerganov/llama.cpp)
   
 ### Usage
 To use the entity_extractor.py script, follow these steps:
@@ -23,8 +24,14 @@ To use the entity_extractor.py script, follow these steps:
 - Open the project in your preferred code editor.
 - Install any necessary dependencies by running pip install -r requirements.txt in your terminal.
 - If you need to use OpenAI models, save your OpenAI API key in a file named "openai.key".
-- Run the script by typing `python entity_extractor.py -a <api> --model <model>` in your terminal, where `<api>` is the name of the LLM API you want to use (`openai`, `bard`, or `llama`) and `<model>` is the name of the model you want to run (dependent upon API choice).
+- Run the script by typing python entity_extractor.py -a <api> --model <model> in your terminal, where <api> is the name of the LLM API you want to use (openai, bard, or llama) and <model> is the name of the model you want to run for OpenAI or path to the model in the case of Llama-2.
 - View the output in the terminal or in the output pane of your code editor.
+
+Example:
+
+```
+python3.10 entity_extractor.py --api llama --model /my-drive/models/llama2/llama-2-13b-chat/ggml-model-q4_0.bin --sentences=example_cases/clinical_text.txt  
+```
 
 ## References
 
