@@ -1,10 +1,13 @@
 """Extracts clinical entities from free text using LLMs."""
+from dotenv import load_dotenv
 import fhir_api
 from prompts import *
 import json
 import time
 import re
 import argparse
+
+load_dotenv()
 
 DEFAULT_MODEL = 'openai'
 
