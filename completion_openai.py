@@ -2,9 +2,7 @@ import os
 from openai import OpenAI
 
 client = OpenAI(
-    # This is the default and can be omitted
     api_key=os.environ.get("OPENAI_API_KEY"),
-    base_url=os.environ.get("OPENAI_HOST"),
 )
 
 MODEL = os.environ.get("OPENAI_MODEL") or "gpt-3.5-turbo"

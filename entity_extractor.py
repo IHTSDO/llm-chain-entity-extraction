@@ -6,6 +6,7 @@ import json
 import time
 import re
 import argparse
+import os
 
 load_dotenv()
 
@@ -18,6 +19,14 @@ arg_parser.add_argument('--model', help='the model to run, dependent upon API ch
 arg_parser.add_argument('--sentences', help='path to a set of free text clinical sentences to encode with SNOMED CT.')
 _args = arg_parser.parse_args()
 llm_api = _args.api.lower()
+os.environ['OPENAI_MODEL'] = _args.model
+
+
+# Read openai.key file and set the OPENAI_API_KEY environment variable
+with open('openai.key', 'r') as file:
+    api_key = file.read().strip()  # Read and strip any extra whitespace
+    os.environ['OPENAI_API_KEY'] = api_key
+
 
 # Conditionally import the chat completion function which uses the given API
 if llm_api == 'llama':

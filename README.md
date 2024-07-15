@@ -27,10 +27,12 @@ To use the entity_extractor.py script, follow these steps:
 - Run the script by typing python entity_extractor.py -a <api> --model <model> in your terminal, where <api> is the name of the LLM API you want to use (openai, bard, or llama) and <model> is the name of the model you want to run for OpenAI or path to the model in the case of Llama-2.
 - View the output in the terminal or in the output pane of your code editor.
 
-Example:
+Examples:
 
 ```
-python3.10 entity_extractor.py --api llama --model /my-drive/models/llama2/llama-2-13b-chat/ggml-model-q4_0.bin --sentences=example_cases/clinical_text.txt  
+python3.10 entity_extractor.py --api llama --model /my-drive/models/llama2/llama-2-13b-chat/ggml-model-q4_0.bin --sentences=example_cases/clinical_text.txt
+
+python3 entity_extractor.py --api openai --model gpt-4o  --sentences=example_cases/clinical_text.txt
 ```
 
 ## References
