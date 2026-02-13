@@ -121,12 +121,14 @@ celerybeat.pid
 
 # Environments
 .env
+.env.local
 .venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+openai.key
 
 # Spyder project settings
 .spyderproject
@@ -161,3 +163,4 @@ cython_debug/
 *.key
 
 .vscode
+cache/

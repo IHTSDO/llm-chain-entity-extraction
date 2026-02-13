@@ -3,6 +3,7 @@
 extract_prompts_listed = [ { "role": "system", "content": """You are a clinical entity extractor. \
 Review the clinical notes provided by the user and extract the important entities mentioned. \
 First extract all symptoms, then extract all diagnoses, then extract all procedures, and finally extract all medications. \
+Treat as procedures any actions performed on the patient, including examinations, bedside assessments, diagnostic tests, imaging, measurements, and therapeutic interventions. \
 Each clinical note is independent. Don't include demographics, commentary or clarification, only the entities and the requested properties. \
 
 The desired format is one comma-separated list for each type of entity.
@@ -16,10 +17,13 @@ Medications: ...
     {"role":"user", "content":""} ]
 
 extract_prompts = [
-    { "role": "system", "content": """You are a clinical entity extractor. Report results as a JSON array of objects. \
+    { "role": "system", "content": """You are a clinical entity extractor. Report results as JSON using this exact shape: {"entities":[...]} where entities is an array of objects. \
 Review the clinical notes provided by the user and extract all mentions of symptoms, diagnoses, procedures, and medications. \
+Treat as procedures any actions performed on the patient, including examinations, bedside assessments, diagnostic tests, imaging, measurements, and therapeutic interventions. \
+Include procedures even when phrased as completed actions or documented results from the action (for example, findings stated after a test or exam). \
 Each clinical note is independent. \
 Don't include demographics, commentary or clarification, only entities and the requested properties. \
+Exclude temporal qualifiers and durations from entity text (for example, remove phrases like "for 2 weeks", "of 3 days duration", "since yesterday"). Keep only the clinical concept itself. \
 Provide the following information for each entity:
  - text: text of the entity
  - type: type of clinical entity (symptom, diagnosis, procedure, medication, etc.)
@@ -31,6 +35,7 @@ Provide the following information for each entity:
 simplify_prompts = [ { "role": "system", "content": """You are a clinical entity simplifier. Respond with simpler forms of the terms provided by the user. \
 The goal is to make the terms easier to match with SNOMED.
 SNOMED is a clinical terminology that does not use plurals or other non-essential words. Remove plurals, and other non-essential words.
+Prefer the core condition name over qualifiers (for example, remove severity, laterality, or broad location adjectives if they are not essential).
 Do not include any commentary or explanation in your response. Only a clinical term like a clinician would use.
 """},
     {"role":"user", "content":"pain in hands"},
@@ -39,6 +44,10 @@ Do not include any commentary or explanation in your response. Only a clinical t
     {"role":"assistant", "content":"vesicular lesion"},
     {"role":"user", "content":"severe allergic symptoms"},
     {"role":"assistant", "content":"allergic disorder"},
+    {"role":"user", "content":"bilateral knee pains"},
+    {"role":"assistant", "content":"knee pain"},
+    {"role":"user", "content":"severe lower back muscle spasms"},
+    {"role":"assistant", "content":"back muscle spasm"},
     {"role":"user", "content":""} ]
 
 '''generalise_prompts_LEGACY = [ { "role": "system", "content": """Your task is to answer in a consistent style.
@@ -63,6 +72,10 @@ Do not include any commentary or explanation in your response. Only a clinical t
     {"role":"assistant", "content":"respiratory finding"},
     {"role":"user", "content":"secondary hypertension"},
     {"role":"assistant", "content":"hypertension"},
+    {"role":"user", "content":"bacterial pneumonia"},
+    {"role":"assistant", "content":"pneumonia"},
+    {"role":"user", "content":"migraine with aura"},
+    {"role":"assistant", "content":"headache disorder"},
     {"role":"user", "content":""} ]
 
 '''accuracy_prompts_LEGACY = [ {"role":"system", "content": """You are a clinical expert, that compares terms doctors write in clinical notes with SNOMED CT terms selected to represent the same meaning.
@@ -73,13 +86,14 @@ Do not include any commentary or explanation in your response.
 
 accuracy_prompts = [ {"role":"system", "content": """You are a clinical expert, that compares terms doctors write in clinical notes with SNOMED CT terms selected to represent the same meaning.
 You will be given a clinician's term and a SNOMED term, and you need to assess how closely the terms are related based on the given context, on a scale from 1 to 5, where 1 means no meaningful relationship and 5 means identical meaning.
+When two terms preserve the same clinical meaning and specificity, treat lexical transformations as synonymous. This includes word-order changes, derivational variants (noun/adjective form), inflectional variants (singular/plural), and common clinical paraphrases.
 Do not include any commentary or explanation in your response. Use this table for guidance:
 
 1 - No meaningful relationship
 2 - Loosely related
-3 - Related but not synonymous
-4 - Synonymous
-5 - Identical meaning
+3 - Related but not synonymous (meaning or specificity changed)
+4 - Synonymous clinical meaning and equivalent specificity, even if wording differs
+5 - Identical meaning and near-exact wording
 """}, 
     {"role":"user", "content":""}]
 
